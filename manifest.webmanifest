@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "建築師敷地計畫｜歷屆申論題庫",
+  "short_name": "敷地計畫題庫",
+  "description": "建築師敷地計畫與都市設計申論題、題目來源、答案及個人筆記",
+  "lang": "zh-Hant",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f4f0",
+  "theme_color": "#253c34",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
