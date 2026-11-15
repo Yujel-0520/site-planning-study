@@ -14,3 +14,5 @@ Android：Chrome 開啟網站 → 安裝 App／加入主畫面。
 筆記保存在各使用者瀏覽器的 localStorage，不會上傳 GitHub；跨裝置請使用匯出、匯入 JSON 功能。
 
 本網站為學習用整理資料，非考選部官方答案。官方試卷請以考選部網站為準。
+
+<!-- redeploy-check: 2026-11-15; trigger Pages workflow on main -->
