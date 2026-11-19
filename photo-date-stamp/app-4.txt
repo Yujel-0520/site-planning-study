@@ -1,0 +1,119 @@
+pFolder.file(name, blob, {binary: true});
+          item.state = 'done';
+          item.message = '';
+          success++;
+        } catch (err) {
+          item.state = 'error';
+          item.message = err?.message || '處理失敗';
+          errors.push(`${item.file.name}: ${item.message}`);
+        }
+        renderList();
+        updateProgress(i + 1, ready.length, `${i+1}/${ready.length} 完成`);
+        await new Promise(r => setTimeout(r, 0));
+      }
+
+      if (!outputDir && success) {
+        updateProgress(ready.length, ready.length, '正在建立 ZIP…');
+        state.lastZipBlob = await zip.generateAsync({type: 'blob', compression: 'STORE'});
+        state.lastZipName = `${batch}.zip`;
+        saveZipBtn.classList.remove('hidden');
+      }
+
+      resultArea.classList.remove('hidden');
+      resultTitle.textContent = success ? `完成 ${success} 張` : '沒有成功輸出的照片';
+      const where = outputDir ? `已儲存到所選資料夾內的「${batch}」資料夾。` : (success ? '整批 ZIP 已準備好，請按下方按鈕儲存。' : '');
+      resultText.textContent = `${where}${errors.length ? ` ${errors.length} 張失敗或略過。` : ''}`.trim();
+    } catch (err) {
+      resultArea.classList.remove('hidden');
+      resultTitle.textContent = '處理失敗';
+      resultText.textContent = err?.message || String(err);
+    } finally {
+      state.processing = false;
+      processBtn.textContent = '開始批次處理';
+      updateControls();
+    }
+  }
+
+  async function saveZip() {
+    if (!state.lastZipBlob) return;
+    const file = new File([state.lastZipBlob], state.lastZipName, {type: 'application/zip'});
+    try {
+      if (navigator.canShare && navigator.share && navigator.canShare({files: [file]})) {
+        await navigator.share({files: [file], title: '照片日期戳記'});
+        return;
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+    const url = URL.createObjectURL(state.lastZipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = state.lastZipName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  async function chooseFolder() {
+    try {
+      state.folderHandle = await window.showDirectoryPicker({mode: 'readwrite'});
+      folderName.textContent = state.folderHandle.name;
+      resetResult();
+    } catch (err) {
+      if (err?.name !== 'AbortError') alert(`無法選擇資料夾：${err?.message || err}`);
+    }
+  }
+
+  function refreshDemo() {
+    stampDemo.textContent = dateFormat.value === 'slash' ? '2026/10/06' : '2026 10 06';
+    stampDemo.style.fontSize = stampSize.value === 'small' ? '22px' : stampSize.value === 'large' ? '31px' : '26px';
+    renderList();
+  }
+
+  function isIos() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    state.deferredInstallPrompt = e;
+    installBtn.classList.remove('hidden');
+  });
+
+  installBtn.addEventListener('click', async () => {
+    if (isStandalone()) return;
+    if (state.deferredInstallPrompt) {
+      state.deferredInstallPrompt.prompt();
+      await state.deferredInstallPrompt.userChoice.catch(() => {});
+      state.deferredInstallPrompt = null;
+      return;
+    }
+    iosInstall.classList.remove('hidden');
+  });
+
+  closeInstallBtn.addEventListener('click', () => iosInstall.classList.add('hidden'));
+  iosInstall.addEventListener('click', e => { if (e.target === iosInstall) iosInstall.classList.add('hidden'); });
+
+  fileInput.addEventListener('change', () => addFiles(fileInput.files));
+  clearBtn.addEventListener('click', clearAll);
+  processBtn.addEventListener('click', processBatch);
+  saveZipBtn.addEventListener('click', saveZip);
+  if (supportsFolderPicker) chooseFolderBtn.addEventListener('click', chooseFolder);
+  dateFormat.addEventListener('change', refreshDemo);
+  stampSize.addEventListener('change', refreshDemo);
+
+  if (isStandalone()) installBtn.classList.add('hidden');
+
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  }
+
+  renderList();
+  updateControls();
+  refreshDemo();
+})();
