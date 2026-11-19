@@ -1,0 +1,136 @@
+[x+w-t,y+half-t],[x+w-t,y+2*t]],
+      e: [[x,y+half],[x+t,y+half+t],[x+t,y+h-2*t],[x,y+h-t],[x-b,y+h-2*t],[x-b,y+half+t]],
+      c: [[x+w,y+half],[x+w+b,y+half+t],[x+w+b,y+h-2*t],[x+w,y+h-t],[x+w-t,y+h-2*t],[x+w-t,y+half+t]]
+    };
+    for (const s of DIGITS[digit] || '') drawPoly(ctx, S[s]);
+    return w;
+  }
+
+  function measureStamp(text, h) {
+    const digitW = h * 0.55;
+    const gap = h * 0.105;
+    const slashW = h * 0.22;
+    const spaceW = h * 0.30;
+    let total = 0;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      total += /\d/.test(c) ? digitW : (c === '/' ? slashW : spaceW);
+      if (i < text.length - 1) total += gap;
+    }
+    return total;
+  }
+
+  function drawStamp(ctx, width, height, text) {
+    const h = Math.max(24, Math.min(210, height * stampScale()));
+    const gap = h * 0.105;
+    const slashW = h * 0.22;
+    const spaceW = h * 0.30;
+    const stampW = measureStamp(text, h);
+    const mx = Math.max(16, width * 0.018);
+    const my = Math.max(14, height * 0.022);
+    let x = Math.max(mx, width - stampW - mx);
+    const y = Math.max(my, height - h - my);
+
+    ctx.save();
+    ctx.fillStyle = '#ff9f16';
+    ctx.shadowColor = 'rgba(255,112,0,.85)';
+    ctx.shadowBlur = Math.max(1.2, h * 0.035);
+
+    for (const ch of text) {
+      if (/\d/.test(ch)) {
+        const w = drawDigit(ctx, x, y, ch, h);
+        x += w + gap;
+      } else if (ch === '/') {
+        ctx.strokeStyle = '#ff9f16';
+        ctx.lineWidth = Math.max(2, h * 0.072);
+        ctx.lineCap = 'butt';
+        ctx.beginPath();
+        ctx.moveTo(x + slashW, y + h * 0.10);
+        ctx.lineTo(x, y + h * 0.93);
+        ctx.stroke();
+        x += slashW + gap;
+      } else {
+        x += spaceW + gap;
+      }
+    }
+    ctx.restore();
+  }
+
+  function canvasToBlob(canvas, mime) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('輸出照片失敗')), mime, 1.0);
+    });
+  }
+
+  async function processOne(item) {
+    const bitmap = await decodeToBitmap(item.file);
+    const width = bitmap.naturalWidth || bitmap.width;
+    const height = bitmap.naturalHeight || bitmap.height;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', {alpha: false});
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    drawStamp(ctx, width, height, formatDate(item.date));
+
+    if (typeof bitmap.close === 'function') bitmap.close();
+
+    let mime = 'image/jpeg';
+    const lower = item.file.name.toLowerCase();
+    if (lower.endsWith('.png')) mime = 'image/png';
+    else if (lower.endsWith('.webp')) mime = 'image/webp';
+    return await canvasToBlob(canvas, mime);
+  }
+
+  async function writeBlobToDirectory(dirHandle, name, blob) {
+    const fileHandle = await dirHandle.getFileHandle(name, {create: true});
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  }
+
+  function updateProgress(current, total, name) {
+    const pct = total ? Math.round((current / total) * 100) : 0;
+    progressArea.classList.remove('hidden');
+    progressText.textContent = name;
+    progressPercent.textContent = `${pct}%`;
+    progressBar.style.width = `${pct}%`;
+  }
+
+  async function processBatch() {
+    const ready = state.items.filter(x => x.date && x.state !== 'error' && x.state !== 'skipped');
+    if (!ready.length || state.processing) return;
+
+    state.processing = true;
+    resetResult();
+    updateControls();
+    processBtn.textContent = '處理中…';
+    updateProgress(0, ready.length, '準備中…');
+
+    const batch = batchLabel();
+    const errors = [];
+    let success = 0;
+    let outputDir = null;
+    let zip = null;
+    let zipFolder = null;
+
+    try {
+      if (state.folderHandle) {
+        outputDir = await state.folderHandle.getDirectoryHandle(batch, {create: true});
+      } else {
+        if (!window.JSZip) throw new Error('ZIP 模組尚未載入，請確認網路後重新開啟 App。');
+        zip = new JSZip();
+        zipFolder = zip.folder(batch);
+      }
+
+      for (let i = 0; i < ready.length; i++) {
+        const item = ready[i];
+        updateProgress(i, ready.length, `${i+1}/${ready.length} ${item.file.name}`);
+        try {
+          const blob = await processOne(item);
+          const name = outputName(item.file);
+          if (outputDir) await writeBlobToDirectory(outputDir, name, blob);
+          else zi
