@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#171717" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="日期戳記" />
+  <title>照片日期戳記</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">LOCAL PHOTO TOOL</p>
+        <h1>照片日期戳記</h1>
+        <p class="sub">讀取照片實際拍攝日期，批次加上相機風格日期戳記。照片只在你的裝置上處理。</p>
+      </div>
+      <button id="installBtn" class="secondary small" type="button">安裝到手機</button>
+    </header>
+
+    <section class="card hero-card">
+      <label class="upload-zone" for="fileInput">
+        <span class="upload-icon">＋</span>
+        <strong>選取照片</strong>
+        <span>可一次選多張 JPEG / PNG / HEIC / HEIF / WebP</span>
+      </label>
+      <input id="fileInput" type="file" accept="image/*,.heic,.heif,.jpg,.jpeg,.png,.webp" multiple hidden />
+      <div class="file-summary">
+        <span id="fileCount">尚未選取照片</span>
+        <button id="clearBtn" class="text-btn" type="button" disabled>清除</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <h2>日期戳記</h2>
+          <p>預設依照你提供的參考照片：右下角、橘黃色數位字。</p>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+        <label>
+          <span>日期格式</span>
+          <select id="dateFormat">
+            <option value="space" selected>2026 10 06（參考照片）</option>
+            <option value="slash">2026/10/06</option>
+          </select>
+        </label>
+        <label>
+          <span>字體大小</span>
+          <select id="stampSize">
+            <option value="small">小</option>
+            <option value="medium" selected>中（建議）</option>
+            <option value="large">大</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="stamp-demo-wrap">
+        <div class="stamp-demo" id="stampDemo">2026 10 06</div>
+        <span>示意</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <h2>輸出</h2>
+          <p>手機：整批打包成 ZIP；支援資料夾存取的桌面瀏覽器：可直接寫入指定資料夾。</p>
+        </div>
+      </div>
+
+      <div id="folderArea" class="folder-area hidden">
+        <button id="chooseFolderBtn" class="secondary" type="button">選擇輸出資料夾</button>
+        <span id="folderName">尚未選擇</span>
+      </div>
+
+      <button id="processBtn" class="primary" type="button" disabled>開始批次處理</button>
+
+      <div id="progressArea" class="progress-area hidden" aria-live="polite">
+        <div class="progress-meta">
+          <span id="progressText">準備中…</span>
+          <span id="progressPercent">0%</span>
+        </div>
+        <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+      </div>
+
+      <div id="resultArea" class="result-area hidden">
+        <div class="result-icon">✓</div>
+        <div>
+          <strong id="resultTitle">處理完成</strong>
+          <p id="resultText"></p>
+        </div>
+      </div>
+
+      <button id="saveZipBtn" class="primary hidden" type="button">儲存 / 分享整批 ZIP</button>
+    </section>
+
+    <section class="card list-card">
+      <div class="section-head">
+        <div>
+          <h2>照片清單</h2>
+          <p>沒有實際拍攝日期（EXIF）的照片會略過，不會用檔案修改日期冒充。</p>
+        </div>
+      </div>
+      <div id="photoList" class="photo-list empty"><p>選取照片後會顯示在這裡。</p></div>
+    </section>
+
+    <section class="notice">
+      <strong>畫質說明</strong>
+      <p>輸出不縮圖、不降低像素尺寸，JPEG 以最高品質重新編碼。因為日期必須實際寫進照片像素，JPEG 技術上一定需要重新編碼；HEIC 在瀏覽器版會轉為高品質 JPEG。</p>
+    </section>
+  </main>
+
+  <div id="iosInstall" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="installTitle">
+    <div class="modal-card">
+      <h3 id="installTitle">加入 iPhone / iPad 主畫面</h3>
+      <p>請用 Safari 開啟此頁，點下方「分享」按鈕，再選「加入主畫面」。之後就能像一般 App 一樣從桌面開啟。</p>
+      <button id="closeInstallBtn" class="primary" type="button">知道了</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/exifreader@4.54.0/dist/exif-reader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.2/dist/jszip.min.js"></script>
+  <script src="loader.js"></script>
+</body>
+</html>
