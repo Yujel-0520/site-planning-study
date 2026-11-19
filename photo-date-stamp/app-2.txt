@@ -1,0 +1,134 @@
+= 'photo-meta';
+      const name = document.createElement('div');
+      name.className = 'photo-name';
+      name.textContent = item.file.name;
+      const date = document.createElement('div');
+      date.className = 'photo-date';
+      date.textContent = item.date ? `拍攝：${formatDate(item.date)}` : (item.message || '等待讀取…');
+      meta.append(name, date);
+
+      const [label, cls] = stateLabel(item);
+      const status = document.createElement('div');
+      status.className = `photo-state ${cls}`;
+      status.textContent = label;
+
+      row.append(img, meta, status);
+      photoList.append(row);
+    }
+  }
+
+  async function addFiles(fileList) {
+    const incoming = Array.from(fileList || []).filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));
+    if (!incoming.length) return;
+
+    resetResult();
+    for (const file of incoming) {
+      const duplicate = state.items.some(x => x.file.name === file.name && x.file.size === file.size && x.file.lastModified === file.lastModified);
+      if (duplicate) continue;
+      const item = {
+        file,
+        date: null,
+        state: 'reading',
+        message: '',
+        thumbUrl: isHeic(file) ? null : URL.createObjectURL(file)
+      };
+      state.items.push(item);
+      renderList();
+      try {
+        item.date = await readCaptureDate(file);
+        if (item.date) {
+          item.state = 'ready';
+          item.message = '';
+        } else {
+          item.state = 'skipped';
+          item.message = '找不到 EXIF 實際拍攝日期';
+        }
+      } catch (err) {
+        item.state = 'error';
+        item.message = err?.message || 'EXIF 讀取失敗';
+      }
+      renderList();
+    }
+    updateControls();
+  }
+
+  function updateControls() {
+    const ready = state.items.filter(x => x.state === 'ready' || x.state === 'done').length;
+    fileCount.textContent = state.items.length ? `已選取 ${state.items.length} 張・可處理 ${ready} 張` : '尚未選取照片';
+    clearBtn.disabled = !state.items.length || state.processing;
+    processBtn.disabled = !ready || state.processing;
+  }
+
+  function resetResult() {
+    state.lastZipBlob = null;
+    state.lastZipName = '';
+    resultArea.classList.add('hidden');
+    saveZipBtn.classList.add('hidden');
+  }
+
+  function clearAll() {
+    for (const item of state.items) if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl);
+    state.items = [];
+    fileInput.value = '';
+    resetResult();
+    progressArea.classList.add('hidden');
+    renderList();
+    updateControls();
+  }
+
+  async function decodeToBitmap(file) {
+    let sourceBlob = file;
+    if (isHeic(file)) {
+      if (!window.heic2any) throw new Error('HEIC 模組尚未載入，請確認網路後重新開啟 App。');
+      let converted = await heic2any({blob: file, toType: 'image/jpeg', quality: 1});
+      if (Array.isArray(converted)) converted = converted[0];
+      sourceBlob = converted;
+    }
+
+    if ('createImageBitmap' in window) {
+      try {
+        return await createImageBitmap(sourceBlob, {imageOrientation: 'from-image'});
+      } catch (_) {
+        return await createImageBitmap(sourceBlob);
+      }
+    }
+
+    return await new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(sourceBlob);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('照片解碼失敗')); };
+      img.src = url;
+    });
+  }
+
+  function stampScale() {
+    if (stampSize.value === 'small') return 0.031;
+    if (stampSize.value === 'large') return 0.048;
+    return 0.039;
+  }
+
+  const DIGITS = {
+    0: 'abcdef', 1: 'bc', 2: 'abdeg', 3: 'abcdg', 4: 'bcfg',
+    5: 'acdfg', 6: 'acdefg', 7: 'abc', 8: 'abcdefg', 9: 'abcdfg'
+  };
+
+  function drawPoly(ctx, pts) {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawDigit(ctx, x, y, digit, h) {
+    const t = Math.max(2, h * 0.09);
+    const w = h * 0.55;
+    const half = h / 2;
+    const b = t * 0.45;
+    const S = {
+      a: [[x+t,y],[x+w-t,y],[x+w,y+b],[x+w-t,y+t],[x+t,y+t],[x,y+b]],
+      g: [[x+t,y+half-t/2],[x+w-t,y+half-t/2],[x+w,y+half],[x+w-t,y+half+t/2],[x+t,y+half+t/2],[x,y+half]],
+      d: [[x+t,y+h-t],[x+w-t,y+h-t],[x+w,y+h-b],[x+w-t,y+h],[x+t,y+h],[x,y+h-b]],
+      f: [[x,y+t],[x+t,y+2*t],[x+t,y+half-t],[x,y+half],[x-b,y+half-t],[x-b,y+2*t]],
+      b: [[x+w,y+t],[x+w+b,y+2*t],[x+w+b,y+half-t],[x+w,y+half],
