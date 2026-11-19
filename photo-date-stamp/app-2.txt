@@ -4,8 +4,28 @@
       name.textContent = item.file.name;
       const date = document.createElement('div');
       date.className = 'photo-date';
-      date.textContent = item.date ? `拍攝：${formatDate(item.date)}` : (item.message || '等待讀取…');
+      date.textContent = item.date
+        ? `${item.manual ? '手動' : '拍攝'}：${formatDate(item.date)}`
+        : (item.message || '等待讀取…');
       meta.append(name, date);
+
+      if ((!item.date && (item.state === 'skipped' || item.state === 'error')) || item.manual) {
+        const manualWrap = document.createElement('label');
+        manualWrap.className = 'manual-date-wrap';
+
+        const manualLabel = document.createElement('span');
+        manualLabel.textContent = item.manual ? '修改手動日期' : '手動日期';
+
+        const manualInput = document.createElement('input');
+        manualInput.type = 'date';
+        manualInput.className = 'manual-date-input';
+        manualInput.setAttribute('aria-label', `${item.file.name} 手動日期`);
+        if (item.manual && item.date) manualInput.value = dateToInputValue(item.date);
+        manualInput.addEventListener('change', () => applyManualDate(item, manualInput.value));
+
+        manualWrap.append(manualLabel, manualInput);
+        meta.append(manualWrap);
+      }
 
       const [label, cls] = stateLabel(item);
       const status = document.createElement('div');
@@ -15,6 +35,47 @@
       row.append(img, meta, status);
       photoList.append(row);
     }
+  }
+
+  function dateToInputValue(date) {
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  }
+
+  function applyManualDate(item, value) {
+    resetResult();
+
+    if (!value) {
+      item.date = null;
+      item.manual = false;
+      item.state = 'skipped';
+      item.message = '找不到 EXIF 實際拍攝日期，請手動填寫';
+      renderList();
+      updateControls();
+      return;
+    }
+
+    const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return;
+
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0);
+    if (
+      dt.getFullYear() !== Number(m[1]) ||
+      dt.getMonth() !== Number(m[2]) - 1 ||
+      dt.getDate() !== Number(m[3])
+    ) {
+      item.date = null;
+      item.manual = false;
+      item.state = 'skipped';
+      item.message = '日期格式不正確，請重新填寫';
+    } else {
+      item.date = dt;
+      item.manual = true;
+      item.state = 'ready';
+      item.message = '手動填寫日期';
+    }
+
+    renderList();
+    updateControls();
   }
 
   async function addFiles(fileList) {
@@ -28,6 +89,7 @@
       const item = {
         file,
         date: null,
+        manual: false,
         state: 'reading',
         message: '',
         thumbUrl: isHeic(file) ? null : URL.createObjectURL(file)
@@ -41,7 +103,7 @@
           item.message = '';
         } else {
           item.state = 'skipped';
-          item.message = '找不到 EXIF 實際拍攝日期';
+          item.message = '找不到 EXIF 實際拍攝日期，請手動填寫';
         }
       } catch (err) {
         item.state = 'error';
