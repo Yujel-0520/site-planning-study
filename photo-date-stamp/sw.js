@@ -1,4 +1,4 @@
-const CACHE = 'photo-date-stamp-v2';
+const CACHE = 'photo-date-stamp-v3';
 const SHELL = [
   './', './index.html', './style.css', './loader.js', './manifest.webmanifest', './icon.svg',
   './app-1.txt', './app-2.txt', './app-3.txt', './app-4.txt'
