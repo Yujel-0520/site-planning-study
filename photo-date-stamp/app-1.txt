@@ -1,0 +1,135 @@
+(() => {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const fileInput = $('fileInput');
+  const fileCount = $('fileCount');
+  const clearBtn = $('clearBtn');
+  const processBtn = $('processBtn');
+  const photoList = $('photoList');
+  const progressArea = $('progressArea');
+  const progressText = $('progressText');
+  const progressPercent = $('progressPercent');
+  const progressBar = $('progressBar');
+  const resultArea = $('resultArea');
+  const resultTitle = $('resultTitle');
+  const resultText = $('resultText');
+  const saveZipBtn = $('saveZipBtn');
+  const dateFormat = $('dateFormat');
+  const stampSize = $('stampSize');
+  const stampDemo = $('stampDemo');
+  const folderArea = $('folderArea');
+  const chooseFolderBtn = $('chooseFolderBtn');
+  const folderName = $('folderName');
+  const installBtn = $('installBtn');
+  const iosInstall = $('iosInstall');
+  const closeInstallBtn = $('closeInstallBtn');
+
+  const state = {
+    items: [],
+    folderHandle: null,
+    lastZipBlob: null,
+    lastZipName: '',
+    deferredInstallPrompt: null,
+    processing: false
+  };
+
+  const supportsFolderPicker = 'showDirectoryPicker' in window;
+  if (supportsFolderPicker) folderArea.classList.remove('hidden');
+
+  function isHeic(file) {
+    return /\.(heic|heif)$/i.test(file.name) || /hei(c|f)/i.test(file.type || '');
+  }
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function formatDate(date) {
+    const y = date.getFullYear();
+    const m = pad2(date.getMonth() + 1);
+    const d = pad2(date.getDate());
+    return dateFormat.value === 'slash' ? `${y}/${m}/${d}` : `${y} ${m} ${d}`;
+  }
+
+  function parseExifDate(raw) {
+    if (!raw) return null;
+    if (raw instanceof Date && !Number.isNaN(raw.getTime())) return raw;
+    if (Array.isArray(raw)) raw = raw[0];
+    if (typeof raw === 'object' && raw !== null) {
+      raw = raw.description ?? raw.value ?? raw.computed ?? '';
+      if (Array.isArray(raw)) raw = raw[0];
+    }
+    const s = String(raw).trim();
+    const m = s.match(/(\d{4})[:\/-](\d{2})[:\/-](\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (!m) return null;
+    const dt = new Date(
+      Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+      Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0)
+    );
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+
+  async function readCaptureDate(file) {
+    if (!window.ExifReader) throw new Error('EXIF 模組尚未載入，請確認網路後重新開啟 App。');
+    const tags = await ExifReader.load(file, {
+      includeTags: ['DateTimeOriginal', 'DateTimeDigitized', 'DateTime', 'CreateDate']
+    });
+    const candidates = [
+      tags?.DateTimeOriginal,
+      tags?.DateTimeDigitized,
+      tags?.DateTime,
+      tags?.CreateDate
+    ];
+    for (const tag of candidates) {
+      const dt = parseExifDate(tag);
+      if (dt) return dt;
+    }
+    return null;
+  }
+
+  function safeName(name) {
+    return name.replace(/[\\/:*?"<>|]+/g, '_').trim() || 'photo';
+  }
+
+  function outputName(file) {
+    const base = safeName(file.name.replace(/\.[^.]+$/, ''));
+    const lower = file.name.toLowerCase();
+    if (isHeic(file)) return `${base}_dated.jpg`;
+    if (lower.endsWith('.png')) return `${base}_dated.png`;
+    if (lower.endsWith('.webp')) return `${base}_dated.webp`;
+    return `${base}_dated.jpg`;
+  }
+
+  function batchLabel() {
+    const now = new Date();
+    return `DateStamped_${now.getFullYear()}${pad2(now.getMonth()+1)}${pad2(now.getDate())}_${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`;
+  }
+
+  function stateLabel(item) {
+    if (item.state === 'reading') return ['讀取日期…', ''];
+    if (item.state === 'ready') return ['可處理', 'ok'];
+    if (item.state === 'done') return ['完成', 'ok'];
+    if (item.state === 'skipped') return ['無拍攝日期', 'error'];
+    if (item.state === 'error') return ['錯誤', 'error'];
+    return ['', ''];
+  }
+
+  function renderList() {
+    if (!state.items.length) {
+      photoList.className = 'photo-list empty';
+      photoList.innerHTML = '<p>選取照片後會顯示在這裡。</p>';
+      return;
+    }
+    photoList.className = 'photo-list';
+    photoList.innerHTML = '';
+    for (const item of state.items) {
+      const row = document.createElement('div');
+      row.className = 'photo-row';
+
+      const img = document.createElement('img');
+      img.className = 'thumb';
+      img.alt = '';
+      if (item.thumbUrl) img.src = item.thumbUrl;
+      else img.src = 'icon.svg';
+
+      const meta = document.createElement('div');
+      meta.className 
